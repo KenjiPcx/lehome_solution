@@ -252,6 +252,30 @@ uv run python scripts/dagger_collect.py \
 
 I encourage you to try it, but in practice teleop in simulation is pretty hard.
 
+For the Mac-to-RunPod XLeRobot setup, save the connection values in the ignored
+`.env.teleop` file once:
+
+```bash
+LEFT_LEADER_PORT=/dev/cu.usbmodem...
+RIGHT_LEADER_PORT=/dev/cu.usbmodem...
+RUNPOD_SSH_HOST=your-pod-host
+RUNPOD_SSH_PORT=your-pod-port
+```
+
+Manage the persistent simulator independently from the Mac viewer:
+
+```bash
+./scripts/teleoperate_sim.sh status
+./scripts/teleoperate_sim.sh restart
+./scripts/teleoperate_sim.sh attach
+./scripts/teleoperate_sim.sh stop
+```
+
+`attach` opens Ilia's three-camera dashboard fullscreen and connects both
+leaders. Closing it detaches the Mac only; the RunPod simulator stays warm for
+the next `attach`. Restart the remote process only when `status` reports a
+failed simulator.
+
 ---
 
 ## Training on real data
@@ -284,4 +308,3 @@ If you find this work useful, please cite it as:
       url           = {https://arxiv.org/abs/2606.27163}
 }
 ```
-

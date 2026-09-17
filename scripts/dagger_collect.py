@@ -2796,14 +2796,21 @@ class DaggerController:
                 action = state if state is not None else np.zeros(12, dtype=np.float32)
 
             # Send step to sim
+            pending_key = [-1]
+
+            def repaint_while_waiting():
+                key = self.ui.update(
+                    obs, garment, sim_step, self.queue.position_str(),
+                    None, self.queue.success_count, self.queue.done_count,
+                    joint_state=self._get_joint_state(obs),
+                )
+                if key >= 0:
+                    pending_key[0] = key
+
             try:
                 resp = sim.send_step(
                     action, steps_per_batch,
-                    on_wait=lambda: self.ui.update(
-                        obs, garment, sim_step, self.queue.position_str(),
-                        None, self.queue.success_count, self.queue.done_count,
-                        joint_state=self._get_joint_state(obs),
-                    ))
+                    on_wait=repaint_while_waiting)
             except Exception as e:
                 logger.error(f"Step failed on sim {sim.sim_id}: {e}")
                 return "error"
@@ -2856,13 +2863,15 @@ class DaggerController:
 
             # Handle keyboard
             time_remaining = (max_steps - sim_step) / 30.0
-            key = self.ui.update(
-                obs, garment, sim_step, self.queue.position_str(),
-                check_status, self.queue.success_count, self.queue.done_count,
-                time_remaining=time_remaining,
-                fps=fps_val,
-                joint_state=self._get_joint_state(obs),
-            )
+            key = pending_key[0]
+            if key < 0:
+                key = self.ui.update(
+                    obs, garment, sim_step, self.queue.position_str(),
+                    check_status, self.queue.success_count, self.queue.done_count,
+                    time_remaining=time_remaining,
+                    fps=fps_val,
+                    joint_state=self._get_joint_state(obs),
+                )
 
             if key == self.KEY_PAUSE:
                 if self.ui.state == "PAUSED":
