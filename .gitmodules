@@ -4,5 +4,5 @@
 	branch = main
 [submodule "lehome-challenge"]
 	path = lehome-challenge
-	url = https://github.com/IliaLarchenko/lehome-challenge.git
+	url = https://github.com/KenjiPcx/lehome-challenge.git
 	branch = main

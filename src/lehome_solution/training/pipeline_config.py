@@ -93,6 +93,7 @@ class AugmentationConfig:
         pos_offset_range    — meters, extra uniform(−v, +v) per xyz added to reset range
         rot_offset_range    — degrees, extra uniform(−v, +v) per euler angle
         scale_range         — e.g. 0.1 → scale ∈ [0.9, 1.1]; success thresholds auto-adjusted
+        garment_scale_factor — deterministic multiplier for larger garments
         roughness_range     — delta from default roughness, uniform(−v, +v), clamped [0,1]
         camera_pos_jitter   — meters, uniform(−v, +v) per xyz on each camera
         camera_rot_jitter   — degrees, uniform(−v, +v) per euler angle on each camera
@@ -100,6 +101,7 @@ class AugmentationConfig:
                               skipped in visual_only replays; saved value reused for hard-mining replay)
         arm_rot_z_deg       — degrees, per-arm independent uniform(−v, +v) on base Z-axis rotation
                               (physics-affecting; same replay semantics as arm_xy_shift)
+        arm_base_offsets    — fixed [dx, dy, dz, dyaw_deg] per arm, applied before random jitter
         table_uv_shift      — UV units, uniform(−v, +v) per s/t axis applied to table-cover material
                               via UsdTransform2d (visual only, no physics impact)
         table_uv_rot_deg    — degrees, UV-space rotation on the same UsdTransform2d
@@ -120,6 +122,7 @@ class AugmentationConfig:
     pos_offset_range: float = 0.0
     rot_offset_range: float = 0.0
     scale_range: float = 0.0
+    garment_scale_factor: float = 1.0
     roughness_range: float = 0.0
     camera_pos_jitter: float = 0.0      # wrist cameras position jitter (meters)
     camera_rot_jitter: float = 0.0      # wrist cameras rotation jitter (degrees)
@@ -147,6 +150,7 @@ class AugmentationConfig:
     top_camera_focal_scale: float = 1.0
     arm_xy_shift: float = 0.0           # per-arm XY base shift (meters), physics-affecting → not visual_only
     arm_rot_z_deg: float = 0.0          # per-arm Z-axis base rotation (degrees), physics-affecting
+    arm_base_offsets: dict[str, list[float]] = dataclasses.field(default_factory=dict)
     table_uv_shift: float = 0.0         # UV-space translation on table-cover texture (no physics)
     table_uv_rot_deg: float = 0.0       # UV-space rotation on table-cover texture (no physics)
     camera_focal_jitter: float = 0.0    # fractional focal length jitter per camera, e.g. 0.05 → ±5%
@@ -167,6 +171,7 @@ class AugmentationConfig:
             or self.pos_offset_range > 0
             or self.rot_offset_range > 0
             or self.scale_range > 0
+            or abs(self.garment_scale_factor - 1.0) > 1e-6
             or self.roughness_range > 0
             or self.camera_pos_jitter > 0
             or self.camera_rot_jitter > 0
@@ -177,6 +182,7 @@ class AugmentationConfig:
             or abs(self.top_camera_focal_scale - 1.0) > 1e-6
             or self.arm_xy_shift > 0
             or self.arm_rot_z_deg > 0
+            or bool(self.arm_base_offsets)
             or self.table_uv_shift > 0
             or self.table_uv_rot_deg > 0
             or self.camera_focal_jitter > 0
