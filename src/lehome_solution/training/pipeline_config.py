@@ -195,9 +195,14 @@ class AugmentationConfig:
 
 @dataclasses.dataclass
 class SimulationGeometryConfig:
-    """Fixed simulator layout. Arm poses are [x_m, y_m, z_m, yaw_deg]."""
+    """Selectable fixed simulator layouts with [x_m, y_m, z_m, yaw_deg] poses."""
 
-    arm_base_poses: dict[str, list[float]] = dataclasses.field(default_factory=dict)
+    active_preset: str = ""
+    presets: dict[str, dict[str, list[float]]] = dataclasses.field(default_factory=dict)
+
+    @property
+    def arm_base_poses(self) -> dict[str, list[float]]:
+        return self.presets.get(self.active_preset, {})
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
@@ -698,24 +703,31 @@ class RLPipelineConfig:
             errors.append("precision_boost.top_k must be in [0, 1]")
         if self.precision_boost.min_successes < 1:
             errors.append("precision_boost.min_successes must be >= 1")
-        for arm, pose in self.simulation_geometry.arm_base_poses.items():
-            if arm not in {"left", "right"}:
-                errors.append(f"simulation_geometry.arm_base_poses: unknown arm '{arm}'")
-            if not isinstance(pose, list) or len(pose) != 4:
-                errors.append(
-                    f"simulation_geometry.arm_base_poses[{arm}] must be "
-                    "[x_m, y_m, z_m, yaw_deg]"
-                )
-            elif not all(
-                isinstance(value, (int, float))
-                and not isinstance(value, bool)
-                and math.isfinite(value)
-                for value in pose
-            ):
-                errors.append(
-                    f"simulation_geometry.arm_base_poses[{arm}] must contain "
-                    "four finite numbers"
-                )
+        geometry = self.simulation_geometry
+        if geometry.presets and not geometry.active_preset:
+            errors.append("simulation_geometry.active_preset is required when presets are defined")
+        if geometry.active_preset and geometry.active_preset not in geometry.presets:
+            errors.append(
+                f"simulation_geometry.active_preset '{geometry.active_preset}' "
+                "is not defined in presets"
+            )
+        for preset, arm_poses in geometry.presets.items():
+            if not isinstance(arm_poses, dict):
+                errors.append(f"simulation_geometry.presets[{preset}] must map arm names to poses")
+                continue
+            for arm, pose in arm_poses.items():
+                path = f"simulation_geometry.presets[{preset}][{arm}]"
+                if arm not in {"left", "right"}:
+                    errors.append(f"{path}: unknown arm '{arm}'")
+                if not isinstance(pose, list) or len(pose) != 4:
+                    errors.append(f"{path} must be [x_m, y_m, z_m, yaw_deg]")
+                elif not all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(value)
+                    for value in pose
+                ):
+                    errors.append(f"{path} must contain four finite numbers")
 
         # Validate per_garment_type_config keys against PARAM_SPACES + GARMENT_TYPES.
         if self.inference_optimization.per_garment_type_config:

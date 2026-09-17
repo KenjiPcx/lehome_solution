@@ -236,14 +236,21 @@ def test_pipeline_config_validation_errors():
 
     # Simulator arm roots must be named, complete, and finite.
     cfg = RLPipelineConfig(simulation_geometry=SimulationGeometryConfig(
-        arm_base_poses={"center": [0.0, 0.0, 0.0, 0.0]}
+        active_preset="bad",
+        presets={"bad": {"center": [0.0, 0.0, 0.0, 0.0]}},
     ))
     assert any("unknown arm" in e for e in cfg.validate())
 
     cfg = RLPipelineConfig(simulation_geometry=SimulationGeometryConfig(
-        arm_base_poses={"left": [0.0, 0.0, float("nan"), 180.0]}
+        active_preset="bad",
+        presets={"bad": {"left": [0.0, 0.0, float("nan"), 180.0]}},
     ))
     assert any("finite numbers" in e for e in cfg.validate())
+
+    cfg = RLPipelineConfig(simulation_geometry=SimulationGeometryConfig(
+        active_preset="missing", presets={"lehome": {}}
+    ))
+    assert any("is not defined" in e for e in cfg.validate())
 
     # Valid config should have no errors
     cfg = RLPipelineConfig()
@@ -330,7 +337,12 @@ def test_pipeline_config_to_dict_roundtrip():
     assert "warmup_steps" in d
     assert "bc_dataset" in d
     assert "hf_model_repo" in d
-    assert d["simulation_geometry"]["arm_base_poses"] == {
+    assert d["simulation_geometry"]["active_preset"] == "xlerobot"
+    assert d["simulation_geometry"]["presets"]["lehome"] == {
+        "left": [-0.23, -0.25, 0.5, 180.0],
+        "right": [0.23, -0.25, 0.5, 180.0],
+    }
+    assert cfg.simulation_geometry.arm_base_poses == {
         "left": [-0.16, -0.453875, 0.500424, 180.0],
         "right": [0.106, -0.453875, 0.500424, 180.0],
     }

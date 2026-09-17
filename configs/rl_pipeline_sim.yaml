@@ -85,12 +85,17 @@ augmentation:
   light_intensity_range: 200   # delta from default 1200
   light_color_range: 0.2     # delta per channel from default 0.75
 
-# Fixed XLeRobot scene geometry. Base poses are [x_m, y_m, z_m, yaw_deg]
-# in world coordinates. Both arms face the table at 180 degrees.
+# Select a fixed scene layout without deleting Ilia's original arm poses.
+# Base poses are [x_m, y_m, z_m, yaw_deg] in world coordinates.
 simulation_geometry:
-  arm_base_poses:
-    left:  [-0.160000, -0.453875, 0.500424, 180.0]
-    right: [ 0.106000, -0.453875, 0.500424, 180.0]
+  active_preset: xlerobot
+  presets:
+    lehome:
+      left:  [-0.230000, -0.250000, 0.500000, 180.0]
+      right: [ 0.230000, -0.250000, 0.500000, 180.0]
+    xlerobot:
+      left:  [-0.160000, -0.453875, 0.500424, 180.0]
+      right: [ 0.106000, -0.453875, 0.500424, 180.0]
 
 # augmentation can be optionally overridden  each rollout strategy via nested `augmentation:` block.
 

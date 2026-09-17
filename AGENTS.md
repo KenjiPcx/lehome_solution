@@ -60,8 +60,8 @@ videos, checkpoints, and one-off probes belong under ignored `.local/` paths.
 The XLeRobot geometry uses the existing pipeline transport without a separate
 adapter:
 
-- absolute per-arm `[x_m, y_m, z_m, yaw_deg]` values in
-  `simulation_geometry.arm_base_poses`
+- named `lehome` and `xlerobot` per-arm `[x_m, y_m, z_m, yaw_deg]` presets in
+  `simulation_geometry.presets`, selected by `simulation_geometry.active_preset`
 - transport through `scripts/run_rl_pipeline.py`
 - root-pose application in
   `lehome-challenge/scripts/utils/visual_augmentation.py`
