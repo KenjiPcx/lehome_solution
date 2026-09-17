@@ -1,0 +1,11 @@
+{
+  "name": "fold-lab-journal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "catalog": "node scripts/build-catalog.mjs",
+    "dev": "node server.mjs",
+    "start": "node server.mjs"
+  }
+}

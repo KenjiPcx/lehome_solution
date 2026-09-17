@@ -1,0 +1,4 @@
+.dialog-media{position:relative;flex-direction:column;justify-content:center;min-width:0}
+.playback-status{color:#bbb;font-size:12px;text-align:center;margin:8px 16px}
+.playback-status:empty{display:none}
+.retry-play{margin:8px auto 16px;background:#5935dd;border:1px solid #8d72ed;border-radius:7px;padding:9px 18px;color:white}
