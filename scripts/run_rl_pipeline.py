@@ -600,7 +600,12 @@ def _run_single_rollout(
 
     # Augmentation config: per-strategy override or pipeline default
     import json as _json_aug
-    aug_dict = aug_config_override if aug_config_override is not None else pipeline_cfg.augmentation.to_dict()
+    aug_dict = dict(
+        aug_config_override
+        if aug_config_override is not None
+        else pipeline_cfg.augmentation.to_dict()
+    )
+    aug_dict["arm_base_poses"] = pipeline_cfg.simulation_geometry.arm_base_poses
     if any(v for k, v in aug_dict.items() if k != "step_color_tint"):
         aug_dict["enabled"] = True
         cmd.extend(["--aug_config", _json_aug.dumps(aug_dict)])

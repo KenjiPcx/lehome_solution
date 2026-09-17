@@ -6,6 +6,7 @@ Loads from YAML (configs/rl_pipeline_sim.yaml or configs/rl_pipeline_sim_to_real
 
 import dataclasses
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -93,7 +94,6 @@ class AugmentationConfig:
         pos_offset_range    — meters, extra uniform(−v, +v) per xyz added to reset range
         rot_offset_range    — degrees, extra uniform(−v, +v) per euler angle
         scale_range         — e.g. 0.1 → scale ∈ [0.9, 1.1]; success thresholds auto-adjusted
-        garment_scale_factor — deterministic multiplier for larger garments
         roughness_range     — delta from default roughness, uniform(−v, +v), clamped [0,1]
         camera_pos_jitter   — meters, uniform(−v, +v) per xyz on each camera
         camera_rot_jitter   — degrees, uniform(−v, +v) per euler angle on each camera
@@ -101,7 +101,6 @@ class AugmentationConfig:
                               skipped in visual_only replays; saved value reused for hard-mining replay)
         arm_rot_z_deg       — degrees, per-arm independent uniform(−v, +v) on base Z-axis rotation
                               (physics-affecting; same replay semantics as arm_xy_shift)
-        arm_base_offsets    — fixed [dx, dy, dz, dyaw_deg] per arm, applied before random jitter
         table_uv_shift      — UV units, uniform(−v, +v) per s/t axis applied to table-cover material
                               via UsdTransform2d (visual only, no physics impact)
         table_uv_rot_deg    — degrees, UV-space rotation on the same UsdTransform2d
@@ -122,7 +121,6 @@ class AugmentationConfig:
     pos_offset_range: float = 0.0
     rot_offset_range: float = 0.0
     scale_range: float = 0.0
-    garment_scale_factor: float = 1.0
     roughness_range: float = 0.0
     camera_pos_jitter: float = 0.0      # wrist cameras position jitter (meters)
     camera_rot_jitter: float = 0.0      # wrist cameras rotation jitter (degrees)
@@ -150,7 +148,6 @@ class AugmentationConfig:
     top_camera_focal_scale: float = 1.0
     arm_xy_shift: float = 0.0           # per-arm XY base shift (meters), physics-affecting → not visual_only
     arm_rot_z_deg: float = 0.0          # per-arm Z-axis base rotation (degrees), physics-affecting
-    arm_base_offsets: dict[str, list[float]] = dataclasses.field(default_factory=dict)
     table_uv_shift: float = 0.0         # UV-space translation on table-cover texture (no physics)
     table_uv_rot_deg: float = 0.0       # UV-space rotation on table-cover texture (no physics)
     camera_focal_jitter: float = 0.0    # fractional focal length jitter per camera, e.g. 0.05 → ±5%
@@ -171,7 +168,6 @@ class AugmentationConfig:
             or self.pos_offset_range > 0
             or self.rot_offset_range > 0
             or self.scale_range > 0
-            or abs(self.garment_scale_factor - 1.0) > 1e-6
             or self.roughness_range > 0
             or self.camera_pos_jitter > 0
             or self.camera_rot_jitter > 0
@@ -182,7 +178,6 @@ class AugmentationConfig:
             or abs(self.top_camera_focal_scale - 1.0) > 1e-6
             or self.arm_xy_shift > 0
             or self.arm_rot_z_deg > 0
-            or bool(self.arm_base_offsets)
             or self.table_uv_shift > 0
             or self.table_uv_rot_deg > 0
             or self.camera_focal_jitter > 0
@@ -193,6 +188,16 @@ class AugmentationConfig:
             or self.arm_color_range > 0
             or self.light_color_temp_range > 0
         )
+
+    def to_dict(self) -> dict:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass
+class SimulationGeometryConfig:
+    """Fixed simulator layout. Arm poses are [x_m, y_m, z_m, yaw_deg]."""
+
+    arm_base_poses: dict[str, list[float]] = dataclasses.field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
@@ -420,6 +425,11 @@ class RLPipelineConfig:
     # Rollout-time simulator augmentation (nested config).
     augmentation: AugmentationConfig = dataclasses.field(default_factory=AugmentationConfig)
 
+    # Fixed simulator geometry, separate from randomized augmentation.
+    simulation_geometry: SimulationGeometryConfig = dataclasses.field(
+        default_factory=SimulationGeometryConfig
+    )
+
     # Training-time image + state augmentation (nested config; defaults match
     # the pre-refactor hard-coded values in observation.preprocess_observation).
     # Propagated onto `model.train_aug` by `run_rl_pipeline._build_train_config`.
@@ -550,6 +560,13 @@ class RLPipelineConfig:
         _validate_keys(aug_raw, AugmentationConfig, "augmentation")
         aug = AugmentationConfig(**{k: v for k, v in aug_raw.items() if k in AugmentationConfig.__dataclass_fields__})
 
+        geometry_raw = raw.get("simulation_geometry", {}) or {}
+        _validate_keys(geometry_raw, SimulationGeometryConfig, "simulation_geometry")
+        simulation_geometry = SimulationGeometryConfig(**{
+            k: v for k, v in geometry_raw.items()
+            if k in SimulationGeometryConfig.__dataclass_fields__
+        })
+
         # Training-time augmentation config.
         train_aug_raw = raw.get("train_augmentation", {}) or {}
         # Backward compat: top-level `state_noise_std` used to live on RLPipelineConfig.
@@ -614,7 +631,7 @@ class RLPipelineConfig:
         nested_keys = {
             "bc_dataset", "dagger_dataset", "advantage", "precision_boost",
             "exploration_noise",
-            "augmentation", "train_augmentation", "rollout_strategies",
+            "augmentation", "simulation_geometry", "train_augmentation", "rollout_strategies",
             "inference_optimization", "initial_rl_datasets", "initial_dagger_datasets",
             "bc_real_datasets",
             "aux_losses",
@@ -644,6 +661,7 @@ class RLPipelineConfig:
             precision_boost=precision_boost,
             exploration_noise=exploration_noise,
             augmentation=aug,
+            simulation_geometry=simulation_geometry,
             train_augmentation=train_aug,
             rollout_strategies=strategies,
             inference_optimization=infer_opt,
@@ -680,6 +698,24 @@ class RLPipelineConfig:
             errors.append("precision_boost.top_k must be in [0, 1]")
         if self.precision_boost.min_successes < 1:
             errors.append("precision_boost.min_successes must be >= 1")
+        for arm, pose in self.simulation_geometry.arm_base_poses.items():
+            if arm not in {"left", "right"}:
+                errors.append(f"simulation_geometry.arm_base_poses: unknown arm '{arm}'")
+            if not isinstance(pose, list) or len(pose) != 4:
+                errors.append(
+                    f"simulation_geometry.arm_base_poses[{arm}] must be "
+                    "[x_m, y_m, z_m, yaw_deg]"
+                )
+            elif not all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                for value in pose
+            ):
+                errors.append(
+                    f"simulation_geometry.arm_base_poses[{arm}] must contain "
+                    "four finite numbers"
+                )
 
         # Validate per_garment_type_config keys against PARAM_SPACES + GARMENT_TYPES.
         if self.inference_optimization.per_garment_type_config:

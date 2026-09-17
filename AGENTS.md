@@ -37,7 +37,8 @@ videos, checkpoints, and one-off probes belong under ignored `.local/` paths.
 | Evaluation metadata, outputs, and rollout strategies | `src/lehome_solution/eval/` |
 | Isaac task, cameras, and initial scene pose | `lehome-challenge/source/lehome/lehome/tasks/bedroom/garment_bi_cfg_v2.py` |
 | Garment physics and base scale | `lehome-challenge/source/lehome/lehome/tasks/bedroom/config_file/particle_garment_cfg.yaml` |
-| Runtime garment scaling and arm placement | `lehome-challenge/scripts/utils/visual_augmentation.py`, configured by `configs/rl_pipeline_sim.yaml` |
+| Fixed simulator arm placement | `configs/rl_pipeline_sim.yaml` (`simulation_geometry`), consumed by `lehome-challenge/scripts/utils/visual_augmentation.py` |
+| Runtime garment augmentation | `lehome-challenge/scripts/utils/visual_augmentation.py`, configured by `configs/rl_pipeline_sim.yaml` |
 | Robot asset and joint limits | `lehome-challenge/source/lehome/lehome/assets/robots/lerobot.py` |
 | Leader-arm device mapping | `lehome-challenge/source/lehome/lehome/devices/lerobot/` |
 | Tests | Extend the nearest existing file under `tests/`; add a test file only for a new independently owned module |
@@ -56,12 +57,13 @@ videos, checkpoints, and one-off probes belong under ignored `.local/` paths.
 
 ## Current XLeRobot Extension
 
-The XLeRobot geometry is already expressed through the existing augmentation
-path:
+The XLeRobot geometry uses the existing pipeline transport without a separate
+adapter:
 
-- `garment_scale_factor: 1.6666666667` in `configs/rl_pipeline_sim.yaml`
-- per-arm `[dx, dy, dz, dyaw_deg]` values in `augmentation.arm_base_offsets`
-- parsing and composition in
+- absolute per-arm `[x_m, y_m, z_m, yaw_deg]` values in
+  `simulation_geometry.arm_base_poses`
+- transport through `scripts/run_rl_pipeline.py`
+- root-pose application in
   `lehome-challenge/scripts/utils/visual_augmentation.py`
 
 Change those config values for geometry experiments. Change

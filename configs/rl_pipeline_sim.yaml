@@ -75,11 +75,6 @@ augmentation:
   pos_offset_range: 0.02      # meters, uniform(−v, +v) per xyz added to reset range
   rot_offset_range: 2.0      # degrees, uniform(−v, +v) per euler angle
   scale_range: 0.1           # e.g. 0.1 → scale ∈ [0.9, 1.1]; success thresholds auto-adjusted
-  # XLeRobot preset: adult garment and bases mounted behind the table edge.
-  garment_scale_factor: 1.6666666667
-  arm_base_offsets:
-    left:  [0.070000, -0.203875, 0.000424, 0.0]
-    right: [-0.124000, -0.203875, 0.000424, 0.0]
   roughness_range: 0.1       # delta from default roughness, clamped [0,1]
   camera_pos_jitter: 0.0     # meters, wrist cameras position jitter
   camera_rot_jitter: 0.0     # degrees, wrist cameras rotation jitter
@@ -89,6 +84,13 @@ augmentation:
   step_color_tint: true     # per-step scale+bias color randomization
   light_intensity_range: 200   # delta from default 1200
   light_color_range: 0.2     # delta per channel from default 0.75
+
+# Fixed XLeRobot scene geometry. Base poses are [x_m, y_m, z_m, yaw_deg]
+# in world coordinates. Both arms face the table at 180 degrees.
+simulation_geometry:
+  arm_base_poses:
+    left:  [-0.160000, -0.453875, 0.500424, 180.0]
+    right: [ 0.106000, -0.453875, 0.500424, 180.0]
 
 # augmentation can be optionally overridden  each rollout strategy via nested `augmentation:` block.
 

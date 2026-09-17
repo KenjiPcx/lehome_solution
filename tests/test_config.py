@@ -203,6 +203,7 @@ def test_pipeline_config_validation_errors():
     """RLPipelineConfig.validate() catches various invalid configurations."""
     from lehome_solution.training.pipeline_config import (
         RLPipelineConfig, AdvantageConfig, BCDatasetConfig,
+        SimulationGeometryConfig,
     )
 
     # num_iterations < 1
@@ -232,6 +233,17 @@ def test_pipeline_config_validation_errors():
     cfg = RLPipelineConfig(bc_dataset=BCDatasetConfig(decay_factor=1.5))
     errors = cfg.validate()
     assert any("decay_factor" in e for e in errors)
+
+    # Simulator arm roots must be named, complete, and finite.
+    cfg = RLPipelineConfig(simulation_geometry=SimulationGeometryConfig(
+        arm_base_poses={"center": [0.0, 0.0, 0.0, 0.0]}
+    ))
+    assert any("unknown arm" in e for e in cfg.validate())
+
+    cfg = RLPipelineConfig(simulation_geometry=SimulationGeometryConfig(
+        arm_base_poses={"left": [0.0, 0.0, float("nan"), 180.0]}
+    ))
+    assert any("finite numbers" in e for e in cfg.validate())
 
     # Valid config should have no errors
     cfg = RLPipelineConfig()
@@ -318,3 +330,7 @@ def test_pipeline_config_to_dict_roundtrip():
     assert "warmup_steps" in d
     assert "bc_dataset" in d
     assert "hf_model_repo" in d
+    assert d["simulation_geometry"]["arm_base_poses"] == {
+        "left": [-0.16, -0.453875, 0.500424, 180.0],
+        "right": [0.106, -0.453875, 0.500424, 180.0],
+    }
