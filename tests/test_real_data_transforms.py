@@ -10,6 +10,36 @@ import numpy as np
 import pytest
 
 from lehome_solution.training import real_data_transforms as rdt
+from lehome_solution.shared.real_robot_config import (
+    apply_control_profile,
+    get_control_profile,
+)
+
+
+def test_control_profile_is_read_from_real_robot_config():
+    assert get_control_profile({"teleoperation": {"control_profile": "mirrored"}}) == "mirrored"
+
+
+def test_mirrored_control_profile_only_inverts_base_and_wrist_roll():
+    action = {
+        "left_shoulder_pan.pos": 10,
+        "left_shoulder_lift.pos": 20,
+        "right_wrist_roll.pos": -30,
+        "right_gripper.pos": 40,
+    }
+    mapped = apply_control_profile(action, "mirrored")
+    assert mapped == {
+        "left_shoulder_pan.pos": -10,
+        "left_shoulder_lift.pos": 20,
+        "right_wrist_roll.pos": 30,
+        "right_gripper.pos": 40,
+    }
+    assert action["left_shoulder_pan.pos"] == 10
+
+
+def test_unknown_control_profile_is_rejected():
+    with pytest.raises(ValueError, match="control_profile"):
+        get_control_profile({"teleoperation": {"control_profile": "sideways"}})
 
 
 def test_real_units_to_sim_radians_arm_joints_are_plain_deg_to_rad():

@@ -70,8 +70,10 @@ from lerobot.teleoperators.so_leader.config_so_leader import SOLeaderConfig
 from websockets.sync.client import connect as ws_connect
 
 from lehome_solution.shared.real_robot_config import (
+    apply_control_profile,
     build_bi_so_follower_config,
     ensure_default_calibration,
+    get_control_profile,
     state_dict_to_vec12,
     vec12_to_action_dict,
 )
@@ -416,8 +418,8 @@ class PolicyClient:
 # Leader arm torque helpers
 # ---------------------------------------------------------------------------
 
-def _enable_leader_torque(teleop, obs: dict) -> None:
-    _mirror_to_leaders(teleop, obs)
+def _enable_leader_torque(teleop, obs: dict, control_profile: str) -> None:
+    _mirror_to_leaders(teleop, obs, control_profile)
     teleop.left_arm.bus.enable_torque()
     teleop.right_arm.bus.enable_torque()
     log.info("Leader torque ENABLED")
@@ -429,12 +431,16 @@ def _disable_leader_torque(teleop) -> None:
     log.info("Leader torque DISABLED")
 
 
-def _mirror_to_leaders(teleop, obs: dict) -> None:
+def _mirror_to_leaders(teleop, obs: dict, control_profile: str) -> None:
+    positions = apply_control_profile(
+        {key: value for key, value in obs.items() if key.endswith(".pos")},
+        control_profile,
+    )
     left = {k.removeprefix("left_").removesuffix(".pos"): v
-            for k, v in obs.items()
+            for k, v in positions.items()
             if k.startswith("left_") and k.endswith(".pos")}
     right = {k.removeprefix("right_").removesuffix(".pos"): v
-             for k, v in obs.items()
+             for k, v in positions.items()
              if k.startswith("right_") and k.endswith(".pos")}
     teleop.left_arm.bus.sync_write("Goal_Position", left)
     teleop.right_arm.bus.sync_write("Goal_Position", right)
@@ -557,7 +563,7 @@ class _BackgroundSaver:
         return self._queue.qsize()
 
 
-def _freeze_position(robot, teleop, duration_s: float) -> None:
+def _freeze_position(robot, teleop, duration_s: float, control_profile: str) -> None:
     """Hold followers + mirror leaders for ``duration_s`` (leaders stay torqued)."""
     obs = robot.get_observation()
     hold = {k: v for k, v in obs.items() if k.endswith(".pos")}
@@ -565,7 +571,7 @@ def _freeze_position(robot, teleop, duration_s: float) -> None:
     while time.perf_counter() < t_end:
         robot.send_action(hold)
         try:
-            _mirror_to_leaders(teleop, obs)
+            _mirror_to_leaders(teleop, obs, control_profile)
         except Exception:
             pass
         try:
@@ -575,7 +581,8 @@ def _freeze_position(robot, teleop, duration_s: float) -> None:
         time.sleep(0.05)
 
 
-def _reset_phase(robot, teleop, kb, timeout_s: float, fps: int) -> str:
+def _reset_phase(robot, teleop, kb, timeout_s: float, fps: int,
+                 control_profile: str) -> str:
     """Manual teleop for garment reset. Returns ``"next"`` or ``"stop"``."""
     _banner(_BG_YELLOW + _WHITE,
             "RESET ENV",
@@ -590,7 +597,7 @@ def _reset_phase(robot, teleop, kb, timeout_s: float, fps: int) -> str:
         elif ev == "ESC":
             return "stop"
         try:
-            action_dict = teleop.get_action()
+            action_dict = apply_control_profile(teleop.get_action(), control_profile)
             robot.send_action(action_dict)
         except Exception:
             pass
@@ -644,7 +651,7 @@ def _record_episodes(robot, teleop, dataset, policy_client, kb, args) -> None:
             if manual_only:
                 _disable_leader_torque(teleop)
             else:
-                _enable_leader_torque(teleop, obs)
+                _enable_leader_torque(teleop, obs, args.control_profile)
             kb.drain()
 
             outcome = "continue"
@@ -678,8 +685,9 @@ def _record_episodes(robot, teleop, dataset, policy_client, kb, args) -> None:
                                 f"MANUAL -> AUTO  ({args.mode_switch_delay:.0f}s — release leaders)")
                     if new_mode == "autonomous":
                         obs = robot.get_observation()
-                        _enable_leader_torque(teleop, obs)
-                    _freeze_position(robot, teleop, args.mode_switch_delay)
+                        _enable_leader_torque(teleop, obs, args.control_profile)
+                    _freeze_position(robot, teleop, args.mode_switch_delay,
+                                     args.control_profile)
                     if new_mode == "manual":
                         _disable_leader_torque(teleop)
                     mode = new_mode
@@ -696,7 +704,8 @@ def _record_episodes(robot, teleop, dataset, policy_client, kb, args) -> None:
 
                 # ---- Record one frame ----
                 if mode == "manual":
-                    action_dict = teleop.get_action()
+                    action_dict = apply_control_profile(
+                        teleop.get_action(), args.control_profile)
                     robot.send_action(action_dict)
                     obs = robot.get_observation()
                 else:
@@ -718,7 +727,7 @@ def _record_episodes(robot, teleop, dataset, policy_client, kb, args) -> None:
                     robot.send_action(action_dict)
                     obs = robot.get_observation()
                     try:
-                        _mirror_to_leaders(teleop, obs)
+                        _mirror_to_leaders(teleop, obs, args.control_profile)
                     except Exception:
                         pass
 
@@ -762,8 +771,8 @@ def _record_episodes(robot, teleop, dataset, policy_client, kb, args) -> None:
                 _disable_leader_torque(teleop)
                 if recorded < args.episodes:
                     kb.drain()
-                    if _reset_phase(robot, teleop, kb,
-                                    args.reset_time_s, args.fps) == "stop":
+                    if _reset_phase(robot, teleop, kb, args.reset_time_s,
+                                    args.fps, args.control_profile) == "stop":
                         break
 
             elif outcome == "discard":
@@ -862,6 +871,8 @@ def main() -> int:
         ap.error(f"Config not found: {args.config}")
     with args.config.open() as fh:
         yaml_cfg = yaml.safe_load(fh)
+    args.control_profile = get_control_profile(yaml_cfg)
+    log.info("Teleoperation control profile: %s", args.control_profile)
 
     # Followers are validated inside build_bi_so_follower_config; leaders here.
     ensure_default_calibration("teleoperators", "so_leader", "bimanual_leader")

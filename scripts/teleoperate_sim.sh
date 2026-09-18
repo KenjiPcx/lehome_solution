@@ -63,6 +63,7 @@ case "$command_name" in
     fi
     remote_command="echo 'Attached to persistent simulator'; tail -n 20 -F '$service_log'"
     exec "$python" "$repo_root/scripts/teleop_gateway.py" \
+      --config "$repo_root/configs/real_robot.yaml" \
       --left-port "$LEFT_LEADER_PORT" --right-port "$RIGHT_LEADER_PORT" \
       --ssh-host "$RUNPOD_SSH_HOST" --ssh-port "$RUNPOD_SSH_PORT" \
       --ssh-key "$ssh_key" --remote-command "$remote_command"

@@ -34,6 +34,8 @@ MOTOR_NAMES: tuple[str, ...] = (
     "right_wrist_flex.pos",   "right_wrist_roll.pos",   "right_gripper.pos",
 )
 ACTION_DIM = len(MOTOR_NAMES)  # 12
+CONTROL_PROFILES = ("direct", "mirrored")
+_MIRRORED_JOINTS = ("shoulder_pan.pos", "wrist_roll.pos")
 
 # Mapping of yaml.cameras.<key> → (which_arm, which_arm_camera_key) so that
 # BiSOFollower's left_/right_ prefix yields the names the eval protocol expects.
@@ -68,6 +70,28 @@ def vec12_to_action_dict(vec12: Iterable[float]) -> dict[str, float]:
     if arr.shape != (ACTION_DIM,):
         raise ValueError(f"expected shape ({ACTION_DIM},), got {arr.shape}")
     return {name: float(arr[i]) for i, name in enumerate(MOTOR_NAMES)}
+
+
+def get_control_profile(yaml_cfg: dict[str, Any]) -> str:
+    """Return the validated teleoperation mapping selected in real_robot.yaml."""
+    profile = yaml_cfg.get("teleoperation", {}).get("control_profile", "direct")
+    if profile not in CONTROL_PROFILES:
+        raise ValueError(
+            f"teleoperation.control_profile must be one of {CONTROL_PROFILES}, got {profile!r}"
+        )
+    return profile
+
+
+def apply_control_profile(action: dict[str, Any], profile: str) -> dict[str, float]:
+    """Map leader joint signs to follower signs without mutating the input."""
+    if profile not in CONTROL_PROFILES:
+        raise ValueError(f"unknown control profile: {profile}")
+    mapped = {name: float(value) for name, value in action.items()}
+    if profile == "mirrored":
+        for name in mapped:
+            if name.endswith(_MIRRORED_JOINTS):
+                mapped[name] *= -1
+    return mapped
 
 
 # ---------------------------------------------------------------------------
