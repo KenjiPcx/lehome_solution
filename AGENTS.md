@@ -26,6 +26,7 @@ videos, checkpoints, and one-off probes belong under ignored `.local/` paths.
 | Direct training entry point and training YAML parsing | `scripts/train.py`, `src/lehome_solution/training/yaml_train_config.py` |
 | Policy evaluation and rollout launch | `scripts/run_eval.py`, `scripts/eval_worker.py` |
 | Simulation DAgger collection | `scripts/dagger_collect.py` |
+| Mac-to-RunPod simulator teleoperation | `scripts/teleop_gateway.py`, `scripts/teleop_remote.py`, `scripts/teleoperate_sim.sh` |
 | Real demonstrations and corrections | `scripts/record_real_dagger.py` |
 | Policy serving | `scripts/serve.py` |
 | Real-to-sim replay and camera alignment | `scripts/replay_real_in_sim.py`, `scripts/real_camera_align.py` |

@@ -5,6 +5,11 @@
 #
 # `port` is the follower arm; `leader_port` is the matching teleop leader
 # (only used by scripts/record_real_dagger.py).
+teleoperation:
+  # direct: leader and follower joint signs match
+  # mirrored: invert shoulder-pan and wrist-roll on both arms
+  control_profile: mirrored
+
 arms:
   left:
     port:        /dev/serial/by-id/<your-left-follower>

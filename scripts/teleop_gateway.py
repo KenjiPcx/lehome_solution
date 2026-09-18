@@ -9,11 +9,19 @@ import queue
 import socket
 import struct
 import subprocess
+import sys
 import threading
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from lehome_solution.shared.real_robot_config import get_control_profile
 
 MOTOR_NAMES = (
     "shoulder_pan", "shoulder_lift", "elbow_flex",
@@ -55,14 +63,14 @@ async function poll(){try{const s=await fetch('/api/status',{cache:'no-store'}).
 
 
 class State:
-    def __init__(self):
+    def __init__(self, control_profile="direct"):
         self.lock = threading.Lock()
         self.frame = b""
         self.frame_id = 0
         self.leaders_connected = False
         self.video_connected = False
         self.ssh_connected = False
-        self.control_profile = "mirrored"
+        self.control_profile = control_profile
         self.remote_state = "BOOTING"
         self.command_pending = False
         self.command_sent_at = None
@@ -268,9 +276,16 @@ def main():
     parser.add_argument("--left-port", required=True); parser.add_argument("--right-port", required=True)
     parser.add_argument("--ssh-host", required=True); parser.add_argument("--ssh-port", required=True, type=int)
     parser.add_argument("--ssh-key", required=True, type=Path); parser.add_argument("--remote-command", required=True)
+    parser.add_argument("--config", type=Path, default=Path("configs/real_robot.yaml"))
     parser.add_argument("--calibration-dir", type=Path, default=Path.home() / ".cache/huggingface/lerobot/calibration/teleoperators/so_leader")
     parser.add_argument("--action-port", type=int, default=18765); parser.add_argument("--video-port", type=int, default=18766); parser.add_argument("--http-port", type=int, default=4174)
-    args = parser.parse_args(); state = State(); leaders = LeaderReader(args.left_port, args.right_port, args.calibration_dir)
+    args = parser.parse_args()
+    config = yaml.safe_load(args.config.read_text())
+    try:
+        profile = get_control_profile(config)
+    except ValueError as exc:
+        parser.error(str(exc))
+    state = State(profile); leaders = LeaderReader(args.left_port, args.right_port, args.calibration_dir)
     action_sock, video_sock = listener(args.action_port), listener(args.video_port)
     threading.Thread(target=serve_leaders, args=(action_sock, leaders, state), daemon=True).start()
     threading.Thread(target=serve_video, args=(video_sock, state), daemon=True).start()
