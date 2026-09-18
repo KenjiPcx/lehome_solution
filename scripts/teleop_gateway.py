@@ -31,7 +31,7 @@ HTML = r"""<!doctype html><html><head><meta charset="utf-8">
 *{box-sizing:border-box}body{margin:0;background:#0d0e10;color:#eee;font:14px system-ui;height:100vh;display:grid;grid-template-rows:58px 1fr}
 header{display:flex;align-items:center;gap:18px;padding:9px 16px;background:#17181b;border-bottom:1px solid #2d3036}
 .brand{font-weight:650}.grow{flex:1}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#666;margin-right:5px}.on{background:#3ddc84}
-select,button{background:#22252a;color:#eee;border:1px solid #454a53;border-radius:7px;padding:9px 12px}button{cursor:pointer;font-weight:650}.primary{background:#5a45ff;border-color:#7565ff;min-width:112px}
+select,button{background:#22252a;color:#eee;border:1px solid #454a53;border-radius:7px;padding:9px 12px}button{cursor:pointer;font-weight:650}.primary{background:#5a45ff;border-color:#7565ff;min-width:128px}.primary:disabled{cursor:wait;opacity:.72}.spin{display:inline-block;width:12px;height:12px;border:2px solid #aaa;border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite;margin-right:7px;vertical-align:-2px}@keyframes s{to{transform:rotate(360deg)}}
 main{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;padding:10px}.viewer{min-height:0;background:#050505;border:1px solid #292c31;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden}.viewer img{width:100%;height:100%;object-fit:contain}
 aside{background:#17181b;border:1px solid #292c31;border-radius:8px;padding:16px}.label{color:#888;text-transform:uppercase;font-size:11px;letter-spacing:.08em;margin-bottom:8px}.mapping{height:190px;background:#111216;border-radius:7px;margin:10px 0}.hint{color:#a8abb2;line-height:1.5}.effect{color:#f4d35e;font-weight:600;margin:12px 0}.error{color:#ff7474}
 @media(max-width:850px){main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mapping{height:130px}}
@@ -44,12 +44,12 @@ aside{background:#17181b;border:1px solid #292c31;border-radius:8px;padding:16px
 <div class="label">Session</div><div id="status" class="hint">Connecting…</div><p class="hint">Choose the mapping while paused. The new mode anchors at the leaders’ current pose, then press Start.</p>
 </aside></main><script>
 const profile=document.getElementById('profile'),start=document.getElementById('start'),statusEl=document.getElementById('status'),frame=document.getElementById('frame');
-let frameId=-1,recording=false;
-function diagram(v){const mirrored=v==='mirrored';const a='M70 55 L70 135 M200 55 L200 135';document.getElementById('map').innerHTML=`<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f4d35e"/></marker></defs><text x="48" y="30" fill="#aaa">Leader L</text><text x="176" y="30" fill="#aaa">Leader R</text><circle cx="70" cy="50" r="14" fill="#30343b"/><circle cx="200" cy="50" r="14" fill="#30343b"/><path d="${a}" stroke="#f4d35e" stroke-width="3" fill="none" marker-end="url(#a)"/><circle cx="70" cy="140" r="14" fill="#235c42"/><circle cx="200" cy="140" r="14" fill="#235c42"/><text x="40" y="174" fill="#aaa">Follower L</text><text x="168" y="174" fill="#aaa">Follower R</text>`;document.getElementById('effect').textContent='Left → Left, Right → Right. '+(mirrored?'Base rotation is inverted; all other joints follow directly.':'All six joints follow directly.');}
+let frameId=-1;
+function diagram(v){const mirrored=v==='mirrored';const a='M70 55 L70 135 M200 55 L200 135';document.getElementById('map').innerHTML=`<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f4d35e"/></marker></defs><text x="48" y="30" fill="#aaa">Leader L</text><text x="176" y="30" fill="#aaa">Leader R</text><circle cx="70" cy="50" r="14" fill="#30343b"/><circle cx="200" cy="50" r="14" fill="#30343b"/><path d="${a}" stroke="#f4d35e" stroke-width="3" fill="none" marker-end="url(#a)"/><circle cx="70" cy="140" r="14" fill="#235c42"/><circle cx="200" cy="140" r="14" fill="#235c42"/><text x="40" y="174" fill="#aaa">Follower L</text><text x="168" y="174" fill="#aaa">Follower R</text>`;document.getElementById('effect').textContent='Left → Left, Right → Right. '+(mirrored?'Base rotation and wrist roll are inverted; joints 2–4 and gripper follow directly.':'All six joints follow directly.');}
 async function post(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(!r.ok)throw new Error(await r.text());return r.json();}
 profile.onchange=async()=>{try{await post('/api/orientation',{profile:profile.value});diagram(profile.value)}catch(e){statusEl.textContent=e.message;statusEl.className='error'}};
-start.onclick=async()=>{try{await post('/api/control',{command:'start_pause'});recording=!recording;start.textContent=recording?'Pause':'Start';}catch(e){statusEl.textContent=e.message;statusEl.className='error'}};
-async function poll(){try{const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());for(const [id,key] of [['sshDot','ssh_connected'],['leaderDot','leaders_connected'],['videoDot','video_connected']])document.getElementById(id).className='dot '+(s[key]?'on':'');profile.value=s.control_profile;diagram(s.control_profile);statusEl.textContent=s.status;statusEl.className='hint';if(s.frame_id!==frameId){frameId=s.frame_id;frame.src='/api/frame.jpg?id='+frameId}}catch(e){statusEl.textContent='Gateway disconnected';statusEl.className='error'}setTimeout(poll,300)}diagram(profile.value);poll();
+start.onclick=async()=>{try{start.disabled=true;start.innerHTML='<i class="spin"></i>Starting…';await post('/api/control',{command:'start_pause'});}catch(e){start.disabled=false;start.textContent='Start';statusEl.textContent=e.message;statusEl.className='error'}};
+async function poll(){try{const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());for(const [id,key] of [['sshDot','ssh_connected'],['leaderDot','leaders_connected'],['videoDot','video_connected']])document.getElementById(id).className='dot '+(s[key]?'on':'');profile.value=s.control_profile;diagram(s.control_profile);statusEl.textContent=s.status;statusEl.className='hint';const rs=s.remote_state;if(s.command_pending){start.disabled=true;start.innerHTML='<i class="spin"></i>'+(s.command_target==='PAUSED'?'Pausing…':'Starting…');}else if(rs==='RECORDING'){start.disabled=false;start.textContent='Pause';}else if(rs==='RESTORING'||rs==='BOOTING'){start.disabled=true;start.innerHTML='<i class="spin"></i>Loading…';}else{start.disabled=false;start.textContent='Start';}if(s.frame_id!==frameId){frameId=s.frame_id;frame.src='/api/frame.jpg?id='+frameId}}catch(e){statusEl.textContent='Gateway disconnected';statusEl.className='error'}setTimeout(poll,300)}diagram(profile.value);poll();
 </script></body></html>"""
 
 
@@ -62,6 +62,10 @@ class State:
         self.video_connected = False
         self.ssh_connected = False
         self.control_profile = "mirrored"
+        self.remote_state = "BOOTING"
+        self.command_pending = False
+        self.command_sent_at = None
+        self.command_target = None
         self.status = "Connecting to persistent RunPod session..."
         self.keys: queue.SimpleQueue[int] = queue.SimpleQueue()
         self.stop = threading.Event()
@@ -81,6 +85,9 @@ class State:
                 "video_connected": self.video_connected,
                 "ssh_connected": self.ssh_connected,
                 "control_profile": self.control_profile,
+                "remote_state": self.remote_state,
+                "command_pending": self.command_pending,
+                "command_target": self.command_target,
                 "status": self.status,
             }
 
@@ -163,8 +170,23 @@ def serve_video(sock, state):
                 state.video_connected = True; state.status = "Ready — choose mapping, then Start"
             try:
                 while not state.stop.is_set():
-                    frame = recv_exact(conn, struct.unpack("!I", recv_exact(conn, 4))[0])
+                    payload = recv_exact(conn, struct.unpack("!I", recv_exact(conn, 4))[0])
+                    metadata_raw, separator, frame = payload.partition(b"\n")
+                    metadata = json.loads(metadata_raw) if separator else {}
                     with state.lock:
+                        previous_state = state.remote_state
+                        remote_state = metadata.get("ui_state", state.remote_state)
+                        state.remote_state = remote_state
+                        if state.command_pending and remote_state == state.command_target:
+                            state.command_pending = False
+                            elapsed = time.monotonic() - state.command_sent_at if state.command_sent_at else 0
+                            state.status = f"{remote_state.title()} — simulator acknowledged in {elapsed:.1f}s"
+                        elif not state.command_pending and remote_state != previous_state:
+                            state.status = {
+                                "PAUSED": "Ready — controls paused",
+                                "RECORDING": "Recording — controls active",
+                                "RESTORING": "Loading simulator state…",
+                            }.get(remote_state, remote_state.title())
                         state.frame = frame; state.frame_id += 1
                     try: key = state.keys.get_nowait()
                     except queue.Empty: key = -1
@@ -214,6 +236,12 @@ def handler(state):
                 if command not in COMMANDS: return self.send(b"unknown command", "text/plain", 400)
                 with state.lock: connected = state.video_connected
                 if not connected: return self.send(b"simulator is reconnecting", "text/plain", 409)
+                with state.lock:
+                    state.command_pending = True
+                    state.command_sent_at = time.monotonic()
+                    state.command_target = "PAUSED" if state.remote_state == "RECORDING" else "RECORDING"
+                    verb = "Pause" if state.command_target == "PAUSED" else "Start"
+                    state.status = f"{verb} requested — waiting for simulator acknowledgement…"
                 state.keys.put(COMMANDS[command]); return self.send(b'{"ok":true}', "application/json")
             return self.send(b"not found", "text/plain", 404)
 
