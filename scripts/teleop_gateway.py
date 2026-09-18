@@ -38,18 +38,19 @@ aside{background:#17181b;border:1px solid #292c31;border-radius:8px;padding:16px
 </style></head><body><header><div class="brand">XLeRobot Teleoperation</div>
 <span><i id="sshDot" class="dot"></i>SSH</span><span><i id="leaderDot" class="dot"></i>Leaders</span><span><i id="videoDot" class="dot"></i>Video</span><div class="grow"></div>
 <select id="profile"><option value="direct">Direct</option><option value="mirrored">Mirrored · invert base rotation</option></select>
-<button id="start" class="primary">Start</button><button onclick="document.documentElement.requestFullscreen()">Fullscreen</button></header>
+<button id="start" class="primary">Start</button><button id="save">Save Sample</button><button onclick="document.documentElement.requestFullscreen()">Fullscreen</button></header>
 <main><div class="viewer"><img id="frame" alt="Waiting for simulator video"></div><aside>
 <div class="label">Control mapping</div><svg id="map" class="mapping" viewBox="0 0 270 190"></svg><div id="effect" class="effect"></div>
 <div class="label">Session</div><div id="status" class="hint">Connecting…</div><p class="hint">Choose the mapping while paused. The new mode anchors at the leaders’ current pose, then press Start.</p>
 </aside></main><script>
-const profile=document.getElementById('profile'),start=document.getElementById('start'),statusEl=document.getElementById('status'),frame=document.getElementById('frame');
+const profile=document.getElementById('profile'),start=document.getElementById('start'),save=document.getElementById('save'),statusEl=document.getElementById('status'),frame=document.getElementById('frame');
 let frameId=-1;
 function diagram(v){const mirrored=v==='mirrored';const a='M70 55 L70 135 M200 55 L200 135';document.getElementById('map').innerHTML=`<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f4d35e"/></marker></defs><text x="48" y="30" fill="#aaa">Leader L</text><text x="176" y="30" fill="#aaa">Leader R</text><circle cx="70" cy="50" r="14" fill="#30343b"/><circle cx="200" cy="50" r="14" fill="#30343b"/><path d="${a}" stroke="#f4d35e" stroke-width="3" fill="none" marker-end="url(#a)"/><circle cx="70" cy="140" r="14" fill="#235c42"/><circle cx="200" cy="140" r="14" fill="#235c42"/><text x="40" y="174" fill="#aaa">Follower L</text><text x="168" y="174" fill="#aaa">Follower R</text>`;document.getElementById('effect').textContent='Left → Left, Right → Right. '+(mirrored?'Base rotation and wrist roll are inverted; joints 2–4 and gripper follow directly.':'All six joints follow directly.');}
 async function post(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(!r.ok)throw new Error(await r.text());return r.json();}
 profile.onchange=async()=>{try{await post('/api/orientation',{profile:profile.value});diagram(profile.value)}catch(e){statusEl.textContent=e.message;statusEl.className='error'}};
 start.onclick=async()=>{try{start.disabled=true;start.innerHTML='<i class="spin"></i>Starting…';await post('/api/control',{command:'start_pause'});}catch(e){start.disabled=false;start.textContent='Start';statusEl.textContent=e.message;statusEl.className='error'}};
-async function poll(){try{const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());for(const [id,key] of [['sshDot','ssh_connected'],['leaderDot','leaders_connected'],['videoDot','video_connected']])document.getElementById(id).className='dot '+(s[key]?'on':'');profile.value=s.control_profile;diagram(s.control_profile);statusEl.textContent=s.status;statusEl.className='hint';const rs=s.remote_state;if(s.command_pending){start.disabled=true;start.innerHTML='<i class="spin"></i>'+(s.command_target==='PAUSED'?'Pausing…':'Starting…');}else if(rs==='RECORDING'){start.disabled=false;start.textContent='Pause';}else if(rs==='RESTORING'||rs==='BOOTING'){start.disabled=true;start.innerHTML='<i class="spin"></i>Loading…';}else{start.disabled=false;start.textContent='Start';}if(s.frame_id!==frameId){frameId=s.frame_id;frame.src='/api/frame.jpg?id='+frameId}}catch(e){statusEl.textContent='Gateway disconnected';statusEl.className='error'}setTimeout(poll,300)}diagram(profile.value);poll();
+save.onclick=async()=>{try{save.disabled=true;save.innerHTML='<i class="spin"></i>Saving…';await post('/api/control',{command:'save'});}catch(e){save.disabled=false;save.textContent='Save Sample';statusEl.textContent=e.message;statusEl.className='error'}};
+async function poll(){try{const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());for(const [id,key] of [['sshDot','ssh_connected'],['leaderDot','leaders_connected'],['videoDot','video_connected']])document.getElementById(id).className='dot '+(s[key]?'on':'');profile.value=s.control_profile;diagram(s.control_profile);statusEl.textContent=s.status;statusEl.className=s.remote_state==='DISCONNECTED'?'error':'hint';const rs=s.remote_state;save.disabled=rs!=='RECORDING'||s.command_pending;save.textContent='Save Sample';if(s.command_pending){start.disabled=true;start.innerHTML='<i class="spin"></i>'+(s.command_target==='PAUSED'?'Finishing…':'Starting…');}else if(rs==='RECORDING'){start.disabled=false;start.textContent='Pause';}else if(rs==='RESTORING'||rs==='BOOTING'){start.disabled=true;start.innerHTML='<i class="spin"></i>Loading…';}else if(rs==='DISCONNECTED'){start.disabled=true;start.textContent='Disconnected';}else{start.disabled=false;start.textContent='Start';}if(s.frame_id!==frameId){frameId=s.frame_id;frame.src='/api/frame.jpg?id='+frameId}}catch(e){statusEl.textContent='Gateway disconnected';statusEl.className='error'}setTimeout(poll,300)}diagram(profile.value);poll();
 </script></body></html>"""
 
 
@@ -202,7 +203,10 @@ def serve_video(sock, state):
             finally:
                 state.clear_keys()
                 with state.lock:
-                    state.video_connected = False; state.frame = b""; state.status = "Simulator disconnected — reconnecting..."
+                    state.video_connected = False; state.frame = b""
+                    state.remote_state = "DISCONNECTED"
+                    state.command_pending = False
+                    state.status = "Simulator disconnected — restart or reconnect required"
 
 
 def supervise_ssh(args, state):
@@ -246,9 +250,9 @@ def handler(state):
                 with state.lock:
                     state.command_pending = True
                     state.command_sent_at = time.monotonic()
-                    state.command_target = "PAUSED" if state.remote_state == "RECORDING" else "RECORDING"
+                    state.command_target = "PAUSED" if command == "save" or state.remote_state == "RECORDING" else "RECORDING"
                     state.command_delivered_at = None
-                    verb = "Pause" if state.command_target == "PAUSED" else "Start"
+                    verb = "Save" if command == "save" else ("Pause" if state.command_target == "PAUSED" else "Start")
                     state.status = f"{verb} requested — waiting for simulator acknowledgement…"
                 state.keys.put(COMMANDS[command]); return self.send(b'{"ok":true}', "application/json")
             return self.send(b"not found", "text/plain", 404)
