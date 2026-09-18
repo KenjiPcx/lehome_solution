@@ -5,8 +5,7 @@
 - Phase: evidence-building
 - Immediate gate: physical leader arms teleoperate the original LeHome simulation
 - Canonical experiment history: `data/video-evidence/index.csv`
-- Human-readable journal: `journal/`
-- Detailed simulation gates: `docs/simulation-iteration-system.md`
+- Generated evidence viewers and media remain local under ignored paths.
 
 ## Problem / Context
 
@@ -94,10 +93,64 @@ proven, the same path moves to the corrected XLeRobot scene.
 
 ## Capability Milestones
 
-The canonical ordered milestones, reviewed status, acceptance criteria and
-experiment associations live in [MVP milestones](mvp-milestones.md), rendered
-in Fold Lab's Roadmap view. Update that document when promoting a milestone;
-this PRD owns product requirements and the rationale for the sequence.
+Experiment PASS labels never promote milestones. Evidence can document success,
+failure, or an inconclusive attempt; checklist completion requires reviewed
+proof.
+
+### P0 — Known-good baseline
+
+**Status:** proved. Reproduce Ilia's original short-shirt fold before changing
+the environment. The original checkpoint visibly folds the original garment;
+baseline recordings EV-0027, EV-0062, and EV-0063 are retained.
+
+### P1 — Leader-to-simulation teleoperation
+
+**Status:** partial. Both physical leaders control and record the known-good
+LeHome simulation with selectable direct/mirrored mapping and three returned
+camera views. Remaining proof is a replayable synchronized episode without a
+restart or dropped interval.
+
+### P2 — Valid XLeRobot simulation scene
+
+**Status:** planned. Match measured base placement, cameras, collisions, and
+flat-cloth reset. Compare annotated original and XLeRobot reset frames before
+policy actions and pass three physical/visual reset canaries. Evidence EV-0064
+records the previous malformed-cloth failure.
+
+### P3 — Reposition demonstration and frozen-policy test
+
+**Status:** planned. Rotate or pull the original-size shirt into a reachable
+folding area, test the frozen checkpoint before retraining, and teleoperate a
+complete reposition-and-fold in three of five controlled layouts.
+
+### P4 — Checkpoint adaptation without forgetting
+
+**Status:** planned. Fine-tune with human corrections plus original successful
+fold data. Promotion requires improved held-out reposition results without
+regression on the original scene.
+
+### P5 — Adult-garment curriculum
+
+**Status:** planned. Increase garment size gradually with credible physics,
+reject malformed resets and simulator exploits, and complete seven of ten
+held-out adult-shirt layouts with visual review.
+
+### P6 — Real workstation transfer
+
+**Status:** planned. Match geometry, cameras, calibration, and action rate at
+the physical workstation. Validate bounded actions and complete three of five
+standardized adult-shirt folds with synchronized video.
+
+### P7 — Onsite continuous improvement
+
+**Status:** planned. Let an operator run, correct, retrain, and promote policies
+without editing code. Candidates must improve a fixed failure set without
+regressing prior capabilities.
+
+Historical mechanics note: attempts 18–20 showed bounded local retention but
+did not establish improved reachability or a complete fold. Attempt 16 remains
+a false positive. Mobile pickup, whole-room simulation, and foundation-model
+replacement remain deferred.
 
 ## Metric Candidates
 
@@ -137,7 +190,7 @@ video and metrics so that an internal PASS cannot hide a visibly broken fold.
       video paths, and human visual verdict.
 - [ ] Failed attempts remain in chronological order and are never relabeled as
       successes because a script completed.
-- [ ] The journal can filter baseline, teleoperation, scene, reposition,
+- [ ] The evidence catalog can filter baseline, teleoperation, scene, reposition,
       adaptation, adult-garment, and real-world runs.
 
 ### US-003: Add corrections without catastrophic forgetting
@@ -181,8 +234,8 @@ Every experiment must state:
 8. **Next action** — promote, revise, or stop; never infer success from script
    completion alone.
 
-The CSV catalog is the source of chronological evidence. The journal is its
-viewer, not a second source of truth.
+The CSV catalog is the source of chronological evidence. Any generated viewer
+is disposable and must not become a second source of truth.
 
 ## Immediate Todo
 
@@ -216,7 +269,7 @@ viewer, not a second source of truth.
 - **Credentials / external services:** existing RunPod pod, SSH key, and volume.
 - **Compute or runtime needs:** Mac serial access and RunPod Isaac environment.
 - **Tooling gaps:** a single doctor/launcher, stale-action watchdog, synchronized
-  recorder, and automatic journal catalog update.
+  recorder, and automatic evidence-catalog update.
 - **Hard-to-QA surfaces:** cloth realism, grasp quality, and final fold quality
   require video review in addition to metrics.
 - **Human gates:** visual approval of milestone evidence; physical emergency

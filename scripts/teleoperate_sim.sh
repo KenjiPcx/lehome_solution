@@ -14,6 +14,7 @@ ssh_key=${RUNPOD_SSH_KEY:-$HOME/.runpod/ssh/runpodctl-ssh-key}
 service_dir=/workspace/lehome/task0003/persistent-teleop
 service_pid=$service_dir/service.pid
 service_log=$service_dir/service.log
+remote_script=/workspace/lehome/task0003/teleop_remote.py
 
 : "${RUNPOD_SSH_HOST:?Set RUNPOD_SSH_HOST in .env.teleop}"
 : "${RUNPOD_SSH_PORT:?Set RUNPOD_SSH_PORT in .env.teleop}"
@@ -24,9 +25,17 @@ ssh_remote() {
     "root@$RUNPOD_SSH_HOST" "$@"
 }
 
+sync_remote() {
+  ssh_remote "mkdir -p /workspace/lehome/task0003"
+  scp -i "$ssh_key" -P "$RUNPOD_SSH_PORT" -o BatchMode=yes \
+    -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "$repo_root/scripts/teleop_remote.py" \
+    "root@$RUNPOD_SSH_HOST:$remote_script"
+}
+
 status_command="pid=\$(cat '$service_pid' 2>/dev/null || true); if test -n \"\$pid\" && kill -0 \"\$pid\" 2>/dev/null; then if tail -n 30 '$service_log' | grep -q 'Simulation App Shutting Down'; then phase=failed; elif grep -q 'Ready:' '$service_log'; then phase=ready; elif grep -q 'Booting sim' '$service_log'; then phase=booting; else phase=starting; fi; child=\$(pgrep -P \"\$pid\" | head -1); printf 'wrapper=running phase=%s pid=%s child=%s\\n' \"\$phase\" \"\$pid\" \"\${child:-none}\"; if test -n \"\$child\"; then ps -p \"\$child\" -o etime=,stat=,%cpu=,cmd=; fi; tail -n 4 '$service_log'; else echo 'wrapper=stopped phase=stopped'; fi"
 stop_command="pid=\$(cat '$service_pid' 2>/dev/null || true); if test -n \"\$pid\" && kill -0 \"\$pid\" 2>/dev/null; then kill -TERM -- -\"\$pid\" 2>/dev/null || kill \"\$pid\" 2>/dev/null || true; fi; rm -f '$service_pid'; echo 'persistent simulator stopped'"
-start_command="mkdir -p '$service_dir'; run_id=\$(date -u +%Y%m%dT%H%M%SZ); output='$service_dir'/session_\$run_id; : >'$service_log'; cd /workspace/lehome/solution; nohup setsid env OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 XLEROBOT_CONTROL_PROFILE=operator_cartesian_mirror XLEROBOT_AUTO_START=0 uv run python /workspace/lehome/task0003/remote_dagger_tcp.py --random_garment Top_Short_Seen_0 --output_dir \"\$output\" --num_episodes 9999 --num_sims 1 --camera_width 320 --camera_height 240 --render_every_n 3 --episode_timeout 300 >>'$service_log' 2>&1 </dev/null & echo \$! >'$service_pid'; echo \"persistent simulator starting pid=\$! output=\$output\""
+start_command="mkdir -p '$service_dir'; run_id=\$(date -u +%Y%m%dT%H%M%SZ); output='$service_dir'/session_\$run_id; : >'$service_log'; cd /workspace/lehome/solution; nohup setsid env OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python '$remote_script' --random_garment Top_Short_Seen_0 --output_dir \"\$output\" --num_episodes 9999 --num_sims 1 --camera_width 320 --camera_height 240 --render_every_n 3 --episode_timeout 300 >>'$service_log' 2>&1 </dev/null & echo \$! >'$service_pid'; echo \"persistent simulator starting pid=\$! output=\$output\""
 
 case "$command_name" in
   status)
@@ -36,6 +45,7 @@ case "$command_name" in
     ssh_remote "$stop_command"
     ;;
   restart)
+    sync_remote
     ssh_remote "$stop_command; $start_command"
     ;;
   attach)
@@ -47,6 +57,7 @@ case "$command_name" in
         exit 1
       fi
     done
+    sync_remote
     if ! ssh_remote "$status_command" | grep -q 'wrapper=running'; then
       ssh_remote "$start_command"
     fi

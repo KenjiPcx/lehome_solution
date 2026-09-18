@@ -18,3 +18,4 @@ submission/
 diag_out/
 .claude/
 .env.teleop
+journal/

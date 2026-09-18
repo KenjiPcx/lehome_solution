@@ -463,6 +463,19 @@ def convert_bimanual_to_action(reading: dict) -> np.ndarray:
     return real_units_to_sim_radians(vec12)
 
 
+def map_bimanual_control(action: np.ndarray, profile: str) -> np.ndarray:
+    """Apply the operator-facing joint signs and clamp to simulator limits."""
+    mapped = np.asarray(action, dtype=np.float32).reshape(2, 6).copy()
+    if profile == "mirrored":
+        mapped[:, (0, 4)] *= -1
+    elif profile != "direct":
+        raise ValueError(f"unknown control profile: {profile}")
+    limits = np.asarray(
+        [ARM_JOINT_LIMITS_RAD[name] for name in JOINT_NAMES], dtype=np.float32
+    )
+    return np.clip(mapped, limits[:, 0], limits[:, 1]).reshape(-1)
+
+
 # ---------------------------------------------------------------------------
 # Failure queue
 # ---------------------------------------------------------------------------

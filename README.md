@@ -273,8 +273,9 @@ Manage the persistent simulator independently from the Mac viewer:
 
 `attach` opens Ilia's three-camera dashboard fullscreen and connects both
 leaders. Closing it detaches the Mac only; the RunPod simulator stays warm for
-the next `attach`. Restart the remote process only when `status` reports a
-failed simulator.
+the next `attach`. The launcher uploads the tracked remote bridge before attach
+or restart, so a fresh clone does not depend on hidden RunPod files. Restart the
+remote process only when `status` reports a failed simulator.
 
 ---
 

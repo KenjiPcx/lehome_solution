@@ -22,6 +22,7 @@ from dagger_collect import (
     get_next_session_dir,
     get_solved_npz_names,
     load_pipeline_config,
+    map_bimanual_control,
 )
 
 
@@ -72,6 +73,17 @@ class TestJointConversion:
         result = convert_bimanual_to_action(_reading())
         assert result.shape == (12,)
         assert result.dtype == np.float32
+
+    def test_mirrored_profile_inverts_only_base_and_wrist_roll(self):
+        action = np.array([0.4, -1.0, 0.8, 0.6, -0.2, 0.5] * 2, dtype=np.float32)
+        result = map_bimanual_control(action, "mirrored").reshape(2, 6)
+        expected = action.reshape(2, 6)
+        np.testing.assert_allclose(result[:, [0, 4]], -expected[:, [0, 4]])
+        np.testing.assert_allclose(result[:, [1, 2, 3, 5]], expected[:, [1, 2, 3, 5]])
+
+    def test_unknown_control_profile_is_rejected(self):
+        with pytest.raises(ValueError, match="unknown control profile"):
+            map_bimanual_control(np.zeros(12, dtype=np.float32), "sideways")
 
 
 # ---------------------------------------------------------------------------
