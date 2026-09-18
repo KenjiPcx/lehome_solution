@@ -20,10 +20,8 @@ MOTOR_NAMES = (
     "wrist_flex", "wrist_roll", "gripper",
 )
 PROFILES = {
-    "same_side_same_direction": "Same side · same direction",
-    "same_side_180": "Same side · reverse direction",
-    "crossed_same_direction": "Cross sides · same direction",
-    "crossed_180": "Cross sides · reverse direction",
+    "direct": "Direct",
+    "mirrored": "Mirrored · invert base rotation",
 }
 COMMANDS = {"start_pause": ord(" "), "save": ord("s"), "retry": ord("r")}
 
@@ -39,7 +37,7 @@ aside{background:#17181b;border:1px solid #292c31;border-radius:8px;padding:16px
 @media(max-width:850px){main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mapping{height:130px}}
 </style></head><body><header><div class="brand">XLeRobot Teleoperation</div>
 <span><i id="sshDot" class="dot"></i>SSH</span><span><i id="leaderDot" class="dot"></i>Leaders</span><span><i id="videoDot" class="dot"></i>Video</span><div class="grow"></div>
-<select id="profile"><option value="same_side_same_direction">Same side · same direction</option><option value="same_side_180">Same side · reverse direction</option><option value="crossed_same_direction">Cross sides · same direction</option><option value="crossed_180">Cross sides · reverse direction</option></select>
+<select id="profile"><option value="direct">Direct</option><option value="mirrored">Mirrored · invert base rotation</option></select>
 <button id="start" class="primary">Start</button><button onclick="document.documentElement.requestFullscreen()">Fullscreen</button></header>
 <main><div class="viewer"><img id="frame" alt="Waiting for simulator video"></div><aside>
 <div class="label">Control mapping</div><svg id="map" class="mapping" viewBox="0 0 270 190"></svg><div id="effect" class="effect"></div>
@@ -47,7 +45,7 @@ aside{background:#17181b;border:1px solid #292c31;border-radius:8px;padding:16px
 </aside></main><script>
 const profile=document.getElementById('profile'),start=document.getElementById('start'),statusEl=document.getElementById('status'),frame=document.getElementById('frame');
 let frameId=-1,recording=false;
-function diagram(v){const crossed=v.startsWith('crossed'),reverse=v.endsWith('180');const a=crossed?'M70 55 L200 135 M200 55 L70 135':'M70 55 L70 135 M200 55 L200 135';document.getElementById('map').innerHTML=`<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f4d35e"/></marker></defs><text x="48" y="30" fill="#aaa">Leader L</text><text x="176" y="30" fill="#aaa">Leader R</text><circle cx="70" cy="50" r="14" fill="#30343b"/><circle cx="200" cy="50" r="14" fill="#30343b"/><path d="${a}" stroke="#f4d35e" stroke-width="3" fill="none" marker-end="url(#a)"/><circle cx="70" cy="140" r="14" fill="#235c42"/><circle cx="200" cy="140" r="14" fill="#235c42"/><text x="40" y="174" fill="#aaa">Follower L</text><text x="168" y="174" fill="#aaa">Follower R</text>`;document.getElementById('effect').textContent=(crossed?'Left ↔ Right crossed. ':'Left → Left, Right → Right. ')+(reverse?'Forward motion is reversed.':'Forward motion stays forward.');}
+function diagram(v){const mirrored=v==='mirrored';const a='M70 55 L70 135 M200 55 L200 135';document.getElementById('map').innerHTML=`<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#f4d35e"/></marker></defs><text x="48" y="30" fill="#aaa">Leader L</text><text x="176" y="30" fill="#aaa">Leader R</text><circle cx="70" cy="50" r="14" fill="#30343b"/><circle cx="200" cy="50" r="14" fill="#30343b"/><path d="${a}" stroke="#f4d35e" stroke-width="3" fill="none" marker-end="url(#a)"/><circle cx="70" cy="140" r="14" fill="#235c42"/><circle cx="200" cy="140" r="14" fill="#235c42"/><text x="40" y="174" fill="#aaa">Follower L</text><text x="168" y="174" fill="#aaa">Follower R</text>`;document.getElementById('effect').textContent='Left → Left, Right → Right. '+(mirrored?'Base rotation is inverted; all other joints follow directly.':'All six joints follow directly.');}
 async function post(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(!r.ok)throw new Error(await r.text());return r.json();}
 profile.onchange=async()=>{try{await post('/api/orientation',{profile:profile.value});diagram(profile.value)}catch(e){statusEl.textContent=e.message;statusEl.className='error'}};
 start.onclick=async()=>{try{await post('/api/control',{command:'start_pause'});recording=!recording;start.textContent=recording?'Pause':'Start';}catch(e){statusEl.textContent=e.message;statusEl.className='error'}};
@@ -63,8 +61,7 @@ class State:
         self.leaders_connected = False
         self.video_connected = False
         self.ssh_connected = False
-        # Observed hardware needs crossed sides while preserving forward motion.
-        self.control_profile = "crossed_same_direction"
+        self.control_profile = "mirrored"
         self.status = "Connecting to persistent RunPod session..."
         self.keys: queue.SimpleQueue[int] = queue.SimpleQueue()
         self.stop = threading.Event()
