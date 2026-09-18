@@ -21,6 +21,11 @@ MOTOR_NAMES = (
     "wrist_flex", "wrist_roll", "gripper",
 )
 WINDOW = "LeHome Simulation Teleoperation"
+ORIENTATIONS = {
+    ord("1"): ("direct", "DIRECT"),
+    ord("2"): ("same_side_180", "SAME-SIDE 180°"),
+    ord("3"): ("crossed_180", "CROSSED 180°"),
+}
 
 
 class State:
@@ -30,6 +35,7 @@ class State:
         self.leaders_connected = False
         self.video_connected = False
         self.ssh_connected = False
+        self.control_profile = "same_side_180"
         self.status = "Connecting to persistent RunPod session..."
         self.keys: queue.SimpleQueue[int] = queue.SimpleQueue()
         self.stop = threading.Event()
@@ -108,7 +114,10 @@ def serve_leaders(sock: socket.socket, leaders: LeaderReader, state: State):
                 conn.sendall(b'{"status":"ready"}\n')
                 while not state.stop.is_set():
                     started = time.monotonic()
-                    payload = json.dumps(leaders.read(), separators=(",", ":")) + "\n"
+                    payload = leaders.read()
+                    with state.lock:
+                        payload["control_profile"] = state.control_profile
+                    payload = json.dumps(payload, separators=(",", ":")) + "\n"
                     conn.sendall(payload.encode())
                     state.stop.wait(max(0.0, 1 / 30 - (time.monotonic() - started)))
             except (ConnectionError, OSError):
@@ -198,14 +207,30 @@ def show_ui(state: State):
             ssh_ok = state.ssh_connected
             leaders_ok = state.leaders_connected
             video_ok = state.video_connected
+            profile = state.control_profile
         if frame is None:
             frame = np.zeros((720, 1280, 3), dtype=np.uint8)
             cv2.putText(frame, status, (55, 350), cv2.FONT_HERSHEY_SIMPLEX,
                         0.75, (220, 220, 220), 2, cv2.LINE_AA)
         badges = f"SSH {'ON' if ssh_ok else 'OFF'}   LEADERS {'ON' if leaders_ok else 'WAIT'}   VIDEO {'ON' if video_ok else 'WAIT'}"
-        cv2.rectangle(frame, (0, 0), (frame.shape[1], 42), (20, 20, 20), -1)
-        cv2.putText(frame, badges, (14, 28), cv2.FONT_HERSHEY_SIMPLEX,
+        cv2.rectangle(frame, (0, 0), (frame.shape[1], 86), (20, 20, 20), -1)
+        cv2.putText(frame, badges, (14, 27), cv2.FONT_HERSHEY_SIMPLEX,
                     0.55, (80, 220, 140) if video_ok else (180, 180, 180), 1, cv2.LINE_AA)
+        mode_label = next(label for value, label in ORIENTATIONS.values() if value == profile)
+        cv2.putText(frame, f"Orientation: {mode_label}   [1 Direct] [2 Same-side 180] [3 Crossed 180]",
+                    (14, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (240, 210, 90), 1, cv2.LINE_AA)
+        # Compact top-down mapping: leaders above, simulated followers below.
+        x0 = frame.shape[1] - 185
+        for x, label in ((x0, "L"), (x0 + 120, "R")):
+            cv2.circle(frame, (x, 18), 11, (130, 130, 130), 1)
+            cv2.circle(frame, (x, 70), 11, (80, 220, 140), 1)
+            cv2.putText(frame, label, (x - 5, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1)
+        if profile == "crossed_180":
+            pairs = (((x0, 30), (x0 + 120, 58)), ((x0 + 120, 30), (x0, 58)))
+        else:
+            pairs = (((x0, 30), (x0, 58)), ((x0 + 120, 30), (x0 + 120, 58)))
+        for start, end in pairs:
+            cv2.arrowedLine(frame, start, end, (240, 210, 90), 1, tipLength=0.25)
         cv2.imshow(WINDOW, frame)
         key = cv2.waitKeyEx(30)
         if not fullscreen_applied:
@@ -213,6 +238,11 @@ def show_ui(state: State):
             fullscreen_applied = True
         if key == 27 or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1:
             state.stop.set()
+        elif key in ORIENTATIONS:
+            with state.lock:
+                state.control_profile = ORIENTATIONS[key][0]
+                state.status = f"Orientation changed to {ORIENTATIONS[key][1]} — re-anchored at current pose"
+                state.clear_keys()
         elif key in (0x01000034, 0xFFC8):
             fullscreen = not fullscreen
             cv2.setWindowProperty(
