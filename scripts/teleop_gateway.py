@@ -66,6 +66,7 @@ class State:
         self.command_pending = False
         self.command_sent_at = None
         self.command_target = None
+        self.command_delivered_at = None
         self.status = "Connecting to persistent RunPod session..."
         self.keys: queue.SimpleQueue[int] = queue.SimpleQueue()
         self.stop = threading.Event()
@@ -88,6 +89,7 @@ class State:
                 "remote_state": self.remote_state,
                 "command_pending": self.command_pending,
                 "command_target": self.command_target,
+                "command_delivered": self.command_delivered_at is not None,
                 "status": self.status,
             }
 
@@ -190,6 +192,11 @@ def serve_video(sock, state):
                         state.frame = frame; state.frame_id += 1
                     try: key = state.keys.get_nowait()
                     except queue.Empty: key = -1
+                    if key >= 0:
+                        with state.lock:
+                            state.command_delivered_at = time.monotonic()
+                            elapsed = state.command_delivered_at - state.command_sent_at
+                            state.status = f"Command delivered in {elapsed:.1f}s — simulator is activating…"
                     conn.sendall(struct.pack("!i", key))
             except (ConnectionError, OSError): pass
             finally:
@@ -240,6 +247,7 @@ def handler(state):
                     state.command_pending = True
                     state.command_sent_at = time.monotonic()
                     state.command_target = "PAUSED" if state.remote_state == "RECORDING" else "RECORDING"
+                    state.command_delivered_at = None
                     verb = "Pause" if state.command_target == "PAUSED" else "Start"
                     state.status = f"{verb} requested — waiting for simulator acknowledgement…"
                 state.keys.put(COMMANDS[command]); return self.send(b'{"ok":true}', "application/json")
