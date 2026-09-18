@@ -2738,7 +2738,21 @@ class DaggerController:
 
         sim.state = "active"
 
-        # Show initial observation, wait for user
+        # Warm the first physics/control exchange before declaring the session
+        # ready. On a cold Isaac process this step can take tens of seconds;
+        # doing it after the operator presses Start makes a delivered command
+        # look lost and delays the first leader action.
+        self.ui.state = "RESTORING"
+        self.ui.update(
+            obs, garment, 0, self.queue.position_str(),
+            obs.get("check_status"), self.queue.success_count,
+            self.queue.done_count, joint_state=self._get_joint_state(obs),
+        )
+        if not sim.hold_step():
+            return "error"
+        obs = sim.current_obs or obs
+
+        # Show the warmed initial observation, then wait for user.
         self.ui.state = "PAUSED"
         logger.info(
             f"Ready: {garment} [sim{sim.sim_id}] "
